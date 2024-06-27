@@ -1,18 +1,21 @@
 from fastapi import FastAPI, Request, HTTPException
 import hmac
 import hashlib
+import base64
 import os
 from dotenv import load_dotenv
 
+# Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
 app = FastAPI()
 
 SHOPIFY_SECRET = os.getenv("SHOPIFY_SECRET")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-def verify_hmac(request: Request) -> bool:
+async def verify_hmac(request: Request) -> bool:
     hmac_header = request.headers.get("x-shopify-hmac-sha256")
-    body = request.body()
+    body = await request.body()
     hash = hmac.new(
         SHOPIFY_SECRET.encode("utf-8"),
         body,
@@ -23,10 +26,10 @@ def verify_hmac(request: Request) -> bool:
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
-    if not verify_hmac(request):
+    if not await verify_hmac(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
-    # Process the webhook data here
+    # Processar os dados do webhook aqui
     print("Webhook received and verified:", data)
     return {"message": "Webhook received successfully"}
 
