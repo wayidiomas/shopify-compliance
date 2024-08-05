@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 import hmac
 import hashlib
@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import base64
 import requests
+from typing import Optional
 
 load_dotenv()
 
@@ -16,35 +17,16 @@ SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY")
 REDIRECT_URI = 'https://shopify-compliance.onrender.com/auth/callback'
 SCOPES = 'read_all_orders,read_orders,write_orders'
 
-async def verify_hmac(request: Request) -> bool:
-    hmac_header = request.headers.get("x-shopify-hmac-sha256")
-    body = await request.body()
-    hash = hmac.new(
-        SHOPIFY_SECRET.encode("utf-8"),
-        body,
-        hashlib.sha256
-    ).digest()
-    computed_hmac = base64.b64encode(hash).decode()
-    return hmac.compare_digest(computed_hmac, hmac_header)
-
-@app.post("/webhook")
-async def handle_webhook(request: Request):
-    if not await verify_hmac(request):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    data = await request.json()
-    # Process the webhook data here
-    print("Webhook received and verified:", data)
-    return {"message": "Webhook received successfully"}
-
-@app.get("/")
-async def read_root():
-    return {"Hello": "World"}
+def generate_hmac(params: dict, secret: str) -> str:
+    message = '&'.join([f"{key}={value}" for key, value in sorted(params.items())])
+    return base64.b64encode(hmac.new(secret.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).digest()).decode()
 
 @app.get("/auth")
 async def auth(request: Request):
     shop = request.query_params.get('shop')
     if shop:
-        auth_url = f"https://{shop}/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state=random_state_string"
+        state = "random_state_string"  # Pode ser um valor gerado dinamicamente
+        auth_url = f"https://{shop}/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}"
         return RedirectResponse(auth_url)
     else:
         raise HTTPException(status_code=400, detail="Missing shop parameter")
@@ -54,19 +36,22 @@ async def auth_callback(request: Request):
     code = request.query_params.get('code')
     shop = request.query_params.get('shop')
     if code and shop:
-        access_token_response = requests.post(
-            f"https://{shop}/admin/oauth/access_token",
-            data={
-                'client_id': SHOPIFY_API_KEY,
-                'client_secret': SHOPIFY_SECRET,
-                'code': code
-            }
-        )
+        data = {
+            'client_id': SHOPIFY_API_KEY,
+            'client_secret': SHOPIFY_SECRET,
+            'code': code
+        }
+        access_token_response = requests.post(f"https://{shop}/admin/oauth/access_token", data=data)
+        access_token_response.raise_for_status()
         access_token = access_token_response.json().get('access_token')
         if access_token:
-            # Store the access token securely (e.g., in a database)
+            # Armazene o token de acesso de maneira segura (e.g., em um banco de dados)
             return {"message": "Authentication successful", "access_token": access_token}
         else:
             raise HTTPException(status_code=400, detail="Failed to obtain access token")
     else:
         raise HTTPException(status_code=400, detail="Missing code or shop parameters")
+
+@app.get("/")
+async def read_root():
+    return {"Hello": "World"}
