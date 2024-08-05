@@ -13,9 +13,8 @@ app = FastAPI()
 
 SHOPIFY_SECRET = os.getenv("SHOPIFY_SECRET")
 SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY")
-SHOPIFY_API_SECRET = os.getenv("SHOPIFY_API_SECRET")
-REDIRECT_URI = 'https://seuservico.onrender.com/auth/callback'  # Atualize para a sua URL
-SCOPES = 'read_products,write_orders'
+REDIRECT_URI = 'https://shopify-compliance.onrender.com/auth/callback'
+SCOPES = 'read_all_orders,read_orders,write_orders'
 
 def verify_hmac(request: Request) -> bool:
     hmac_header = request.headers.get("x-shopify-hmac-sha256")
@@ -59,7 +58,7 @@ async def auth_callback(request: Request):
             f"https://{shop}/admin/oauth/access_token",
             data={
                 'client_id': SHOPIFY_API_KEY,
-                'client_secret': SHOPIFY_API_SECRET,
+                'client_secret': SHOPIFY_SECRET,
                 'code': code
             }
         )
