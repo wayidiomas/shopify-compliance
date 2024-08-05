@@ -16,9 +16,9 @@ SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY")
 REDIRECT_URI = 'https://shopify-compliance.onrender.com/auth/callback'
 SCOPES = 'read_all_orders,read_orders,write_orders'
 
-def verify_hmac(request: Request) -> bool:
+async def verify_hmac(request: Request) -> bool:
     hmac_header = request.headers.get("x-shopify-hmac-sha256")
-    body = request.body()
+    body = await request.body()
     hash = hmac.new(
         SHOPIFY_SECRET.encode("utf-8"),
         body,
@@ -29,7 +29,7 @@ def verify_hmac(request: Request) -> bool:
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
-    if not verify_hmac(request):
+    if not await verify_hmac(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     data = await request.json()
     # Process the webhook data here
