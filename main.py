@@ -26,6 +26,8 @@ logging.basicConfig(level=logging.INFO)
 async def auth(request: Request):
     shop = request.query_params.get('shop')
     if shop:
+        if not shop.endswith(".myshopify.com"):
+            shop = f"{shop}.myshopify.com"
         state = secrets.token_urlsafe(16)  # Gera um valor state aleatório
         auth_url = f"https://{shop}/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}&response_type=code"
         logging.info(f"Redirecting to: {auth_url}")
@@ -38,6 +40,8 @@ async def auth_callback(request: Request):
     code = request.query_params.get('code')
     shop = request.query_params.get('shop')
     if code and shop:
+        if not shop.endswith(".myshopify.com"):
+            shop = f"{shop}.myshopify.com"
         try:
             data = {
                 'client_id': SHOPIFY_API_KEY,
