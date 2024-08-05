@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 import hmac
 import hashlib
@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 import base64
 import requests
-from typing import Optional
+import secrets
 
 load_dotenv()
 
@@ -16,17 +16,14 @@ SHOPIFY_SECRET = os.getenv("SHOPIFY_SECRET")
 SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY")
 REDIRECT_URI = 'https://shopify-compliance.onrender.com/auth/callback'
 SCOPES = 'read_all_orders,read_orders,write_orders'
-
-def generate_hmac(params: dict, secret: str) -> str:
-    message = '&'.join([f"{key}={value}" for key, value in sorted(params.items())])
-    return base64.b64encode(hmac.new(secret.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).digest()).decode()
+BUBBLE_API_URL = 'https://go.smartseller.tech/api/1.1/obj/shop-auth'  # URL do seu endpoint no Bubble
 
 @app.get("/auth")
 async def auth(request: Request):
     shop = request.query_params.get('shop')
     if shop:
-        state = "random_state_string"  # Pode ser um valor gerado dinamicamente
-        auth_url = f"https://{shop}/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}"
+        state = secrets.token_urlsafe(16)  # Gera um valor state aleatório
+        auth_url = f"https://{shop}.myshopify.com/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}&response_type=code"
         return RedirectResponse(auth_url)
     else:
         raise HTTPException(status_code=400, detail="Missing shop parameter")
@@ -41,11 +38,22 @@ async def auth_callback(request: Request):
             'client_secret': SHOPIFY_SECRET,
             'code': code
         }
-        access_token_response = requests.post(f"https://{shop}/admin/oauth/access_token", data=data)
+        access_token_response = requests.post(f"https://{shop}.myshopify.com/admin/oauth/access_token", data=data)
         access_token_response.raise_for_status()
         access_token = access_token_response.json().get('access_token')
         if access_token:
-            # Armazene o token de acesso de maneira segura (e.g., em um banco de dados)
+            # Enviar o nome da loja e o token de acesso para o Bubble
+            bubble_response = requests.post(
+                BUBBLE_API_URL,
+                json={
+                    'shop': shop,
+                    'token': access_token
+                },
+                headers={
+                    'Content-Type': 'application/json'
+                }
+            )
+            bubble_response.raise_for_status()
             return {"message": "Authentication successful", "access_token": access_token}
         else:
             raise HTTPException(status_code=400, detail="Failed to obtain access token")
