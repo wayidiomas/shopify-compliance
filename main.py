@@ -27,7 +27,7 @@ async def auth(request: Request):
     shop = request.query_params.get('shop')
     if shop:
         state = secrets.token_urlsafe(16)  # Gera um valor state aleatório
-        auth_url = f"https://{shop}.myshopify.com/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}&response_type=code"
+        auth_url = f"https://{shop}/admin/oauth/authorize?client_id={SHOPIFY_API_KEY}&scope={SCOPES}&redirect_uri={REDIRECT_URI}&state={state}&response_type=code"
         logging.info(f"Redirecting to: {auth_url}")
         return RedirectResponse(auth_url)
     else:
@@ -44,7 +44,9 @@ async def auth_callback(request: Request):
                 'client_secret': SHOPIFY_SECRET,
                 'code': code
             }
-            access_token_response = requests.post(f"https://{shop}.myshopify.com/admin/oauth/access_token", data=data)
+            access_token_url = f"https://{shop}/admin/oauth/access_token"
+            logging.info(f"Requesting access token from: {access_token_url}")
+            access_token_response = requests.post(access_token_url, data=data)
             access_token_response.raise_for_status()
             access_token = access_token_response.json().get('access_token')
             if access_token:
